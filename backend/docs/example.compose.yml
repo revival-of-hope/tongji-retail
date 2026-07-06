@@ -1,0 +1,80 @@
+# ============================================================
+# 商品零售管理系统 - Docker Compose 编排文件
+# 包含三个服务：
+#   1. oracle-db  - Oracle 21c XE 数据库
+#   2. backend    - ASP.NET Core 8 Web API
+#   3. frontend   - Next.js 14 前端
+#
+# 启动方式：
+#   完整模式（含 Oracle 容器）：docker compose up -d
+#   本机 Oracle 模式：        docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# ============================================================
+
+services:
+  # ==================== Oracle 数据库 ====================
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: retail_oracle
+    environment:
+      ORACLE_PWD: ${ORACLE_PWD:-RetailSystem2024!}
+      ORACLE_CHARACTERSET: AL32UTF8
+    ports:
+      - "1522:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+      - ./scripts/oracle-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -S sys/${ORACLE_PWD:-RetailSystem2024!}@localhost:1521/XE as sysdba || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    networks:
+      - retail_net
+
+  # ==================== ASP.NET Core 后端 ====================
+  backend:
+    build:
+      context: ./RetailSystem.API
+      dockerfile: Dockerfile
+    container_name: retail_backend
+    environment:
+      DB_CONNECTION_STRING: "User Id=${DB_USER:-retail_user};Password=${DB_PASS:-retail_pass};Data Source=${DB_HOST:-oracle-db:1521/XEPDB1};"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-RetailSystem_JWT_SecretKey_2024_VeryLongAndSecure!}
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:5000"
+    ports:
+      - "5000:5000"
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    networks:
+      - retail_net
+    restart: unless-stopped
+
+  # ==================== Next.js 前端 ====================
+  frontend:
+    build:
+      context: ./retail-frontend
+      dockerfile: Dockerfile
+    container_name: retail_frontend
+    environment:
+      # NEXT_PUBLIC_ 变量在构建时被嵌入 JS bundle，浏览器无法解析 Docker 内网域名 backend
+      # 必须使用浏览器可访问的地址（宿主机 localhost）
+      NEXT_PUBLIC_API_URL: "http://localhost:5000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - retail_net
+    restart: unless-stopped
+
+# ==================== 网络和数据卷 ====================
+networks:
+  retail_net:
+    driver: bridge
+
+volumes:
+  oracle_data:
+    driver: local
