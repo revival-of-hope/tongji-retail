@@ -4,12 +4,13 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Api</RootNamespace>
   </PropertyGroup>
     <ItemGroup>
     <!-- OpenAPI 文档生成：.NET 9 起 ASP.NET Core 内置支持 OpenAPI 文档生成 -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.14" />
 
-    <!-- 前后端分离项目常用：JWT 登录认证 -->
+    <!-- JWT 登录认证 -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.14" />
 
     <!-- Oracle + EF Core provider -->
