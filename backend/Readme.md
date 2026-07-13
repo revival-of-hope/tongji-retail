@@ -1,14 +1,4 @@
 **后端**
-## 任务安排
-### 7.15前
-1. 新建一个该项目的分支backend01,将backend/src/Models中的空文件用backend/docs文件夹中的数据库设计文档来填充,要用到的是EntityFrameworkCore9的写法.
-2. 新建一个该项目的分支backend02,研究Oracle数据库驱动连接问题,在program.cs中验证是否能够正常连接并唤醒,并学习一下docker compose中Oracle配置的编写,参考backend/docs中的example.compose.yml中的oracle-db部分,是否可用,待下一步完成测试部分和docker compose文件才知道.
-3. 新建一个该项目的分支backend03,使用minimal api的格式实现api.md中的对应路由,所有需要数据库返回数据的地方留一个空函数返回好用的测试口号即可.
-
-第1个和第3个任务如果不会需要可以去学习一下,或者参考群里发的书😄
-
-## 项目介绍
-
 ## 项目构建与运行
 
 `cd src`后运行了`dotnet new webapi`初始化了src文件夹.

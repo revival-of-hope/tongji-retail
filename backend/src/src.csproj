@@ -16,7 +16,7 @@
     <!-- Oracle + EF Core provider -->
     <PackageReference Include="Oracle.EntityFrameworkCore" Version="9.23.90" />
 
-    <!-- EF Core 迁移、反向工程、设计期工具；只在开发/构建阶段使用 -->
+    <!-- 数据库迁移工具 -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.14">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
