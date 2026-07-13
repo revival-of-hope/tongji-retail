@@ -1,4 +1,7 @@
-namespace Api;
+using Microsoft.EntityFrameworkCore;
+using RetailSystem.Backend.Data;
+
+namespace RetailSystem.Backend;
 
 public partial class Program
 {
@@ -6,6 +9,13 @@ public partial class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // 注册 Oracle 数据库上下文，连接串可用环境变量覆盖。
+        var oracleConnection = builder.Configuration.GetConnectionString("OracleConnection")
+            ?? throw new InvalidOperationException("未配置 OracleConnection 数据库连接字符串。");
+        builder.Services.AddDbContext<RetailDbContext>(options =>
+            options.UseOracle(oracleConnection));
+
+        // 注册接口文档和本地联调所需的跨域策略。
         builder.Services.AddOpenApi();
         builder.Services.AddCors(options =>
         {
@@ -37,6 +47,7 @@ public partial class Program
             "backend3: 后端服务运行中",
             new { })));
 
+        // 按业务模块组织路由，后续可逐步替换为真实处理逻辑。
         var auth = app.MapGroup("/api/auth").WithTags("认证");
         auth.MapPost("/register", Placeholder);
         auth.MapPost("/login", Placeholder);
