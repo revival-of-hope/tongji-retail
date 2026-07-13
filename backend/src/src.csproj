@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Api</RootNamespace>
+    <RootNamespace>API</RootNamespace>
   </PropertyGroup>
     <ItemGroup>
     <!-- OpenAPI 文档生成：.NET 9 起 ASP.NET Core 内置支持 OpenAPI 文档生成 -->

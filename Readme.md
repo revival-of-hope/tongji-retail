@@ -1,12 +1,23 @@
 ## 项目介绍
 本系统以电商平台为业务背景，采用前后端分离架构（C# ASP.NET Core 9 + EntityFrameworkCore 9;  Next.js 14 + Shadcn UI组件库 Oracle 21c）。系统涵盖顾客、商家、管理员、客服四大角色。使用docker compose进行部署
+### 项目分工
+| Docker 与统筹 | 前端              | 后端             | 数据库设计与文档撰写 |
+| ------------- | ----------------- | ---------------- | -------------------- |
+| 周禹佟        | frontend01 宋博文 | backend01 宁子谦 | 熊庭楷               |
+|               | frontend02 李晨恺 | backend02 刘礼嘉 | 赖浩翔               |
+|               | frontend03 刘子康 | backend03 付林轩 | 杜冰焱               |
+
+
+
 
 >请Fork后在本地完成对应功能后再提交到自己的Fork仓库,最后再提交Pull Request就可以了.
 
 ## 任务安排
 ### 后端
 #### 7.30前
-
+1. backend01
+2. backend02
+3. backend03
 
 #### 7.15前
 1. 新建一个该项目的分支backend01,将backend/src/Models中的空文件用backend/docs文件夹中的数据库设计文档来填充,要用到的是EntityFrameworkCore9的写法.
@@ -26,7 +37,11 @@
 
 >一律使用pnpm安装所需的依赖,如果用`npm`或者`yarn`有可能会爆出依赖冲突问题.
 
-## 项目运行(待补充)
+## 项目运行
+无论是本地开发还是一键运行,都需要先复制出.env文件:
+```bash
+cp .env.example .env
+```
 
 ### 本地开发
 
