@@ -1,0 +1,10 @@
+# 后端依赖和构建产物
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.cache
+*.log
+

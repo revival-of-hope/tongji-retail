@@ -1,0 +1,52 @@
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+ENV NUGET_PACKAGES=/root/.nuget/packages \
+    NUGET_XMLDOC_MODE=skip
+
+# Restore project files first so package restore remains cacheable.
+COPY src/RetailSystem.Api.csproj src/
+COPY test/RetailSystem.Api.Tests.csproj test/
+RUN dotnet restore test/RetailSystem.Api.Tests.csproj \
+    --disable-parallel \
+    /p:RestoreFallbackFolders=
+
+COPY src/ src/
+COPY test/ test/
+COPY openapi/ openapi/
+
+# Defensive cleanup: even if a client sends Windows bin/obj files in the
+# build context, never let their project.assets.json enter the Linux build.
+RUN rm -rf src/bin src/obj test/bin test/obj \
+    && dotnet restore test/RetailSystem.Api.Tests.csproj \
+        --force \
+        --no-cache \
+        --disable-parallel \
+        /p:RestoreFallbackFolders=
+
+RUN dotnet test test/RetailSystem.Api.Tests.csproj \
+    --configuration Release \
+    --no-restore \
+    --logger "console;verbosity=detailed" \
+    /p:OpenApiGenerateDocuments=false
+
+RUN dotnet publish src/RetailSystem.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false \
+    /p:OpenApiGenerateDocuments=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+USER app
+ENTRYPOINT ["dotnet", "RetailSystem.Api.dll"]
