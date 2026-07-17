@@ -32,7 +32,9 @@ git switch main
 
 ### 后端
 #### 7.30前
-1. backend01学习Contract写法
+>均需要实现test分支中对应文件夹中的效果并提交PR
+
+1. backend01学习Contract写法,对应Contract文件夹
 
 **示例代码**
 ```cs
@@ -45,7 +47,7 @@ group.MapPost("/items", AddItemAsync)
 上述代码中的`CartItemResponse`即为Contract.
 
 2. backend02学习`Microsoft.NET.Test.Sdk`提供的测试写法,具体参考test分支中backend文件夹中的test文件夹.
-3. backend03学习JWT认证库,理解基本的Jwt原理
+3. backend03学习JWT认证库,理解基本的Jwt原理,对于Services中的文件
 
 #### 7.15前
 1. 新建一个该项目的分支backend01,将backend/src/Models中的空文件用backend/docs文件夹中的数据库设计文档来填充,要用到的是EntityFrameworkCore9的写法.
@@ -55,9 +57,11 @@ group.MapPost("/items", AddItemAsync)
 第1个和第3个任务如果不会需要可以去学习一下,或者参考群里发的书😄
 ### 前端
 #### 7.30前
+>均需要实现test分支中对应文件夹中的效果并提交PR
+
 1. frontend01,学习next.js的app router编写方式,并学习如何使用heyapi库自动生成api路由,详情见test分支中frontend文件夹中的lib文件夹
 2. frontend02,完整学习使用shadcn中提供的组件库,实现搭建test分支中界面的效果.
-3. frontend03,完整学习Zustand的写法和Vitest的写法.
+3. frontend03,完整学习Zustand的写法和Vitest的写法,实现Store和test文件夹中的效果.
 
 #### 7.15前
 1. 新建一个分支frontend01,学习next.js的app router编写方式,并实现如frontend/docs中的api.js中展示的所有测试路由.
