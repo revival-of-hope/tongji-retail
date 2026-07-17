@@ -1,0 +1,25 @@
+# ── 阶段1：构建 ──────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# 先只复制 csproj，利用 Docker 层缓存：
+# 只要 csproj 没变，restore 层就不会重新执行
+COPY *.csproj .
+RUN dotnet restore
+
+# 复制其余源代码（obj/ 和 bin/ 已被 .dockerignore 排除）
+COPY . .
+
+# 发布（--no-restore 安全，因为上一步已 restore 且 obj/ 是干净的）
+RUN dotnet publish -c Release -o /app/publish --no-restore
+
+# ── 阶段2：运行（最小化镜像）────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "src.dll"]
