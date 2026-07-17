@@ -1,5 +1,10 @@
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using RetailSystem.Backend.Data;
+using RetailSystem.Backend.Services;
 
 namespace RetailSystem.Backend;
 
@@ -8,6 +13,45 @@ public partial class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        var jwtOptions = builder.Configuration
+            .GetSection(JwtOptions.SectionName)
+            .Get<JwtOptions>() ?? new JwtOptions();
+        var jwtSecretFromEnvironment = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
+        if (!string.IsNullOrWhiteSpace(jwtSecretFromEnvironment))
+        {
+            jwtOptions.SecretKey = jwtSecretFromEnvironment;
+        }
+
+        ValidateJwtOptions(jwtOptions);
+        builder.Services.Configure<JwtOptions>(options =>
+        {
+            options.Issuer = jwtOptions.Issuer;
+            options.Audience = jwtOptions.Audience;
+            options.SecretKey = jwtOptions.SecretKey;
+            options.ExpirationMinutes = jwtOptions.ExpirationMinutes;
+        });
+        builder.Services.AddScoped<JwtService>();
+        builder.Services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtOptions.Issuer,
+                    ValidAudience = jwtOptions.Audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
+                    ClockSkew = TimeSpan.FromSeconds(30),
+                    RoleClaimType = ClaimTypes.Role,
+                    NameClaimType = ClaimTypes.Name
+                };
+            });
+        builder.Services.AddAuthorization();
 
         // 注册 Oracle 数据库上下文，连接串可用环境变量覆盖。
         var oracleConnection = builder.Configuration.GetConnectionString("OracleConnection")
@@ -41,6 +85,8 @@ public partial class Program
 
         app.UseHttpsRedirection();
         app.UseCors("LocalDevelopment");
+        app.UseAuthentication();
+        app.UseAuthorization();
 
         app.MapGet("/", () => Results.Ok(new ApiResponse<object>(
             true,
@@ -102,6 +148,25 @@ public partial class Program
             true,
             "backend3: 当前接口测试通过",
             new { }));
+    }
+
+    private static void ValidateJwtOptions(JwtOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Issuer) ||
+            string.IsNullOrWhiteSpace(options.Audience))
+        {
+            throw new InvalidOperationException("JWT issuer and audience must be configured.");
+        }
+
+        if (Encoding.UTF8.GetByteCount(options.SecretKey) < 32)
+        {
+            throw new InvalidOperationException("JWT secret must contain at least 32 bytes.");
+        }
+
+        if (options.ExpirationMinutes <= 0)
+        {
+            throw new InvalidOperationException("JWT expiration must be greater than zero.");
+        }
     }
 }
 
