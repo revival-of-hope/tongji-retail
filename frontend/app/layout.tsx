@@ -4,6 +4,8 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils";
 
+import { AuthGuard } from "@/components/auth/auth-guard"
+
 const robotoHeading = Roboto({subsets:['latin'],variable:'--font-heading'});
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
@@ -25,7 +27,11 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", inter.variable, robotoHeading.variable)}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthGuard>
+            {children}
+          </AuthGuard>
+        </ThemeProvider>
       </body>
     </html>
   )
