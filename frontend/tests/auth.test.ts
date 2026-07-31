@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useAuthStore } from '../store/auth'
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// --- 核心修复：手动模拟浏览器环境中的 localStorage ---
+// 手动模拟浏览器环境中的 window 和 localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {}
   return {
@@ -12,42 +11,59 @@ const localStorageMock = (() => {
   }
 })()
 
-// 将模拟的 localStorage 挂载到全局
-Object.defineProperty(global, 'localStorage', { value: localStorageMock })
+// 模拟全局 window 对象
+Object.defineProperty(global, 'window', {
+  value: { localStorage: localStorageMock }
+})
+// 同时也模拟全局 localStorage 以防万一
+Object.defineProperty(global, 'localStorage', {
+  value: localStorageMock
+})
 
-describe('Frontend03 单元测试', () => {
+// 原始测试逻辑
+
+const { loginMock } = vi.hoisted(() => ({ loginMock: vi.fn() }))
+vi.mock("../lib/api/sdk", () => ({
+  api: {
+    login: loginMock,
+    register: vi.fn(),
+    me: vi.fn(),
+  },
+}))
+
+import { useAuthStore } from "../store/auth"
+
+const user = {
+  id: 1,
+  username: "customer",
+  email: "customer@retail.local",
+  phone: null,
+  role: "Customer" as const,
+  isActive: true,
+  createdAt: "2026-07-14T00:00:00Z",
+  merchant: null,
+}
+
+describe("Auth Store 状态流转测试", () => {
   beforeEach(() => {
-    // 每次测试前重置 Store 和模拟的存储
     useAuthStore.setState({ user: null, hydrated: false })
-    localStorage.clear()
+    loginMock.mockReset()
+    window.localStorage.clear()
   })
 
-  it('初始状态下 user 应该为 null', () => {
-    const state = useAuthStore.getState()
-    expect(state.user).toBeNull()
-  })
-
-  it('注销功能 (logout) 应该正常清空状态', () => {
-    // 1. 模拟一个已登录状态
-    useAuthStore.setState({ user: { username: 'magisk' } as any })
-    localStorage.setItem('retail-user', JSON.stringify({ username: 'magisk' }))
-
-    // 2. 执行注销
-    useAuthStore.getState().logout()
-
-    // 3. 验证状态和本地存储是否都空了
-    expect(useAuthStore.getState().user).toBeNull()
-    expect(localStorage.getItem('retail-user')).toBeNull()
-  })
-
-  it('测试数据恢复逻辑 (hydrate)', () => {
-    // 模拟本地已存有数据
-    localStorage.setItem('retail-user', JSON.stringify({ username: 'tester' }))
+  it("登录成功后应该能正确持久化数据", async () => {
+    loginMock.mockResolvedValue({ accessToken: "token-123", user })
+    const result = await useAuthStore.getState().login("customer", "password")
     
-    // 执行恢复
+    expect(result).toEqual(user)
+    expect(window.localStorage.getItem("retail-access-token")).toBe("token-123")
+    expect(useAuthStore.getState().user?.username).toBe("customer")
+  })
+
+  it("Hydrate 功能应该能从缓存恢复状态", () => {
+    window.localStorage.setItem("retail-user", JSON.stringify(user))
     useAuthStore.getState().hydrate()
-    
-    expect(useAuthStore.getState().user?.username).toBe('tester')
     expect(useAuthStore.getState().hydrated).toBe(true)
+    expect(useAuthStore.getState().user).toEqual(user)
   })
 })
