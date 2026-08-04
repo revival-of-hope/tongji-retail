@@ -1,3 +1,4 @@
+// 建表
 using Microsoft.EntityFrameworkCore;
 using RetailSystem.Api.Models;
 

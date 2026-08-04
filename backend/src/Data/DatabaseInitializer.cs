@@ -1,3 +1,4 @@
+// 初始化数据库,加入模拟数据
 using Microsoft.EntityFrameworkCore;
 using RetailSystem.Api.Models;
 
