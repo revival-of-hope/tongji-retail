@@ -1,25 +1,58 @@
-# ── 阶段1：构建 ──────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# 先只复制 csproj，利用 Docker 层缓存：
-# 只要 csproj 没变，restore 层就不会重新执行
-COPY *.csproj .
-RUN dotnet restore
+ENV NUGET_PACKAGES=/root/.nuget/packages \
+    NUGET_XMLDOC_MODE=skip
 
-# 复制其余源代码（obj/ 和 bin/ 已被 .dockerignore 排除）
-COPY . .
+# Restore project files first so package restore remains cacheable.
+COPY src/RetailSystem.Api.csproj src/
+COPY test/RetailSystem.Api.Tests.csproj test/
+RUN dotnet restore test/RetailSystem.Api.Tests.csproj \
+    --disable-parallel \
+    /p:RestoreFallbackFolders=
 
-# 发布（--no-restore 安全，因为上一步已 restore 且 obj/ 是干净的）
-RUN dotnet publish -c Release -o /app/publish --no-restore
+COPY src/ src/
+COPY test/ test/
+COPY openapi/ openapi/
 
-# ── 阶段2：运行（最小化镜像）────────────────────────────────
+# Defensive cleanup: even if a client sends Windows bin/obj files in the
+# build context, never let their project.assets.json enter the Linux build.
+RUN rm -rf src/bin src/obj test/bin test/obj \
+    && dotnet restore test/RetailSystem.Api.Tests.csproj \
+        --force \
+        --no-cache \
+        --disable-parallel \
+        /p:RestoreFallbackFolders=
+
+# Generate the contract from the exact Linux build that will run the tests.
+# Program.cs detects the OpenAPI generator process and skips Oracle startup.
+RUN dotnet build src/RetailSystem.Api.csproj \
+    --configuration Release \
+    --no-restore
+
+RUN dotnet test test/RetailSystem.Api.Tests.csproj \
+    --configuration Release \
+    --no-restore \
+    --logger "console;verbosity=detailed" \
+    /p:OpenApiGenerateDocuments=false
+
+RUN dotnet publish src/RetailSystem.Api.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false \
+    /p:OpenApiGenerateDocuments=false
+
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
-
-ENTRYPOINT ["dotnet", "src.dll"]
+USER app
+ENTRYPOINT ["dotnet", "RetailSystem.Api.dll"]
