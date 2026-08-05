@@ -11,8 +11,12 @@ namespace RetailSystem.Api.Tests;
 
 public sealed class RetailApiFactory : WebApplicationFactory<Program>
 {
+    // EF Core includes the InMemoryDatabaseRoot instance in the cache key for
+    // its internal service provider. Reusing one root lets all test factories
+    // share the provider configuration, while the unique database name below
+    // still keeps every test factory's data isolated.
+    private static readonly InMemoryDatabaseRoot SharedDatabaseRoot = new();
     private readonly string _databaseName = $"retail-tests-{Guid.NewGuid():N}";
-    private readonly InMemoryDatabaseRoot _databaseRoot = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -30,7 +34,7 @@ public sealed class RetailApiFactory : WebApplicationFactory<Program>
             // Guid inside the options callback creates a different database for
             // each service scope, so seed data would disappear between requests.
             services.AddDbContext<AppDbContext>(options =>
-                options.UseInMemoryDatabase(_databaseName, _databaseRoot));
+                options.UseInMemoryDatabase(_databaseName, SharedDatabaseRoot));
         });
     }
 }

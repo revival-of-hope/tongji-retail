@@ -1,7 +1,5 @@
-using System.Data;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Models;
@@ -69,7 +67,7 @@ public static class OrderEndpoints
     private static async Task<IResult> CreateOrderAsync(
         CreateOrderRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
         if (request.CartItemIds is null || request.CartItemIds.Count == 0)
@@ -83,18 +81,14 @@ public static class OrderEndpoints
         var ids = request.CartItemIds.Distinct().ToArray();
         if (ids.Length != request.CartItemIds.Count) return ApiResults.BadRequest("购物车商品不能重复选择");
 
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var userId = principal.GetUserId();
             var cartItems = await db.CartItems
                 .Include(item => item.Cart)
                 .Include(item => item.Product).ThenInclude(product => product.Merchant)
                 .Where(item => ids.Contains(item.Id) && item.Cart.UserId == userId)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(ct);
             if (cartItems.Count != ids.Length) return ApiResults.BadRequest("购物车商品不存在或不属于当前用户");
             if (cartItems.Select(item => item.Product.MerchantId).Distinct().Count() != 1)
                 return ApiResults.BadRequest("一次结算只能选择同一商家的商品，请分开下单");
@@ -126,19 +120,14 @@ public static class OrderEndpoints
             db.Orders.Add(order);
             db.CartItems.RemoveRange(cartItems);
             cartItems[0].Cart.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
 
-            order = await OrderQuery(db).SingleAsync(item => item.Id == order.Id, cancellationToken);
+            order = await OrderQuery(db).SingleAsync(item => item.Id == order.Id, ct);
             return ApiResults.Created(
                 $"/api/orders/{order.Id}",
                 order.ToDetail(),
                 "订单创建成功，请在 30 分钟内支付");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     private static async Task<IResult> GetMyOrdersAsync(
@@ -182,28 +171,23 @@ public static class OrderEndpoints
         long id,
         PayOrderRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
         if (!Enum.IsDefined(request.PaymentMethod)) return ApiResults.BadRequest("支付方式无效");
 
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var userId = principal.GetUserId();
             var order = await OrderQuery(db)
-                .SingleOrDefaultAsync(item => item.Id == id && item.UserId == userId, cancellationToken);
+                .SingleOrDefaultAsync(item => item.Id == id && item.UserId == userId, ct);
             if (order is null) return ApiResults.NotFound("订单不存在");
             if (order.Status != OrderStatus.PendingPayment) return ApiResults.Conflict("订单当前状态不可支付");
             if (order.ExpireAt <= DateTime.UtcNow)
             {
                 order.Status = OrderStatus.Cancelled;
                 order.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(cancellationToken);
-                if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+                await db.SaveChangesAsync(ct);
                 return ApiResults.Conflict("订单已超过支付期限并自动取消");
             }
 
@@ -232,30 +216,21 @@ public static class OrderEndpoints
                 TransactionId = $"SIM-{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..50],
                 PaidAt = now
             };
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
             return ApiResults.Ok(order.ToDetail(), "支付成功");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     private static async Task<IResult> ShipOrderAsync(
         long id,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var userId = principal.GetUserId();
-            var order = await OrderQuery(db).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+            var order = await OrderQuery(db).SingleOrDefaultAsync(item => item.Id == id, ct);
             if (order is null) return ApiResults.NotFound("订单不存在");
             if (order.Items.Any(item => item.Product.Merchant.UserId != userId))
                 return ApiResults.Forbidden("只能处理本店订单");
@@ -263,14 +238,9 @@ public static class OrderEndpoints
 
             order.Status = OrderStatus.Shipped;
             order.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
             return ApiResults.Ok(order.ToDetail(), "订单已发货");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     private static async Task<IResult> CompleteOrderAsync(
@@ -294,18 +264,14 @@ public static class OrderEndpoints
     private static async Task<IResult> CancelOrderAsync(
         long id,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var order = await OrderQuery(db).SingleOrDefaultAsync(
                 item => item.Id == id && item.UserId == principal.GetUserId(),
-                cancellationToken);
+                ct);
             if (order is null) return ApiResults.NotFound("订单不存在");
             if (order.Status is not (OrderStatus.PendingPayment or OrderStatus.PendingShipment))
                 return ApiResults.Conflict("只有待支付或待发货订单可以取消");
@@ -327,14 +293,9 @@ public static class OrderEndpoints
 
             order.Status = OrderStatus.Cancelled;
             order.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
             return ApiResults.Ok(order.ToDetail(), "订单已取消");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     internal static IQueryable<Order> OrderQuery(AppDbContext db) => db.Orders

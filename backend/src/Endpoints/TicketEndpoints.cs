@@ -1,7 +1,5 @@
-using System.Data;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Models;
@@ -111,7 +109,7 @@ public static class TicketEndpoints
         long id,
         ReplyTicketRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Reply) || request.Reply.Trim().Length > 2000)
@@ -119,13 +117,9 @@ public static class TicketEndpoints
         if (!Enum.IsDefined(request.Status)) return ApiResults.BadRequest("工单状态无效");
         if (request.Status == TicketStatus.Pending) return ApiResults.BadRequest("回复后状态不能设置为待处理");
 
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
-            var ticket = await TicketQuery(db).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+            var ticket = await TicketQuery(db).SingleOrDefaultAsync(item => item.Id == id, ct);
             if (ticket is null) return ApiResults.NotFound("工单不存在");
 
             var userId = principal.GetUserId();
@@ -138,18 +132,13 @@ public static class TicketEndpoints
             ticket.Reply = request.Reply.Trim();
             ticket.Status = request.Status;
             ticket.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
 
             var updatedTicket = await TicketQuery(db)
                 .AsNoTracking()
-                .SingleAsync(item => item.Id == id, cancellationToken);
+                .SingleAsync(item => item.Id == id, ct);
             return ApiResults.Ok(updatedTicket.ToResponse(), "工单已更新");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     internal static IQueryable<CustomerServiceTicket> TicketQuery(AppDbContext db) => db.CustomerServiceTickets

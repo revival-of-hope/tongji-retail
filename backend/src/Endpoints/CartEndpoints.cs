@@ -1,7 +1,5 @@
-using System.Data;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Models;
@@ -54,29 +52,25 @@ public static class CartEndpoints
     private static async Task<IResult> AddItemAsync(
         AddCartItemRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
         if (request.ProductId <= 0) return ApiResults.BadRequest("商品编号无效");
         if (request.Quantity <= 0) return ApiResults.BadRequest("加购数量必须大于 0");
 
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var product = await db.Products
                 .Include(item => item.Merchant)
-                .SingleOrDefaultAsync(item => item.Id == request.ProductId, cancellationToken);
+                .SingleOrDefaultAsync(item => item.Id == request.ProductId, ct);
             if (product is null || product.Status != ProductStatus.OnSale)
                 return ApiResults.NotFound("商品不存在或未上架");
             if (request.Quantity > product.StockQuantity) return ApiResults.BadRequest("库存不足");
 
-            var cart = await GetOrCreateCartAsync(principal.GetUserId(), db, cancellationToken);
+            var cart = await GetOrCreateCartAsync(principal.GetUserId(), db, ct);
             var item = await db.CartItems.SingleOrDefaultAsync(
                 cartItem => cartItem.CartId == cart.Id && cartItem.ProductId == request.ProductId,
-                cancellationToken);
+                ct);
             if (item is null)
             {
                 item = new CartItem
@@ -95,16 +89,11 @@ public static class CartEndpoints
             }
 
             cart.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
 
-            item = await CartItemsQuery(db).SingleAsync(cartItem => cartItem.Id == item.Id, cancellationToken);
+            item = await CartItemsQuery(db).SingleAsync(cartItem => cartItem.Id == item.Id, ct);
             return ApiResults.Created($"/api/cart/items/{item.Id}", item.ToResponse(), "已加入购物车");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     private static async Task<IResult> UpdateItemAsync(long cartItemId, UpdateCartItemRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancellationToken)

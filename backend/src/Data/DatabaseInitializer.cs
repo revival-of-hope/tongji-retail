@@ -1,11 +1,30 @@
 // 初始化数据库,加入模拟数据
+using System.Data;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using RetailSystem.Api.Models;
+using RetailSystem.Api.Services;
 
 namespace RetailSystem.Api.Data;
 
 public static class DatabaseInitializer
 {
+    private static readonly HashSet<string> CoreTableNames = new(StringComparer.Ordinal)
+    {
+        "USERS",
+        "MERCHANTS",
+        "CATEGORIES",
+        "PRODUCTS",
+        "PRODUCT_IMAGES",
+        "SHOPPING_CARTS",
+        "CART_ITEMS",
+        "ORDERS",
+        "ORDER_ITEMS",
+        "PAYMENTS",
+        "PRODUCT_REVIEWS",
+        "CUSTOMER_SERVICE_TICKETS"
+    };
+
     public static async Task InitializeAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
         await using var scope = services.CreateAsyncScope();
@@ -18,12 +37,36 @@ public static class DatabaseInitializer
             try
             {
                 await db.Database.EnsureCreatedAsync(cancellationToken);
+
+                if (IsOracle(db))
+                {
+                    var allocatedTables = await EnsureOracleSegmentsAllocatedAsync(db, cancellationToken);
+                    if (allocatedTables > 0)
+                    {
+                        logger.LogInformation(
+                            "Prepared Oracle storage for first writes: {Tables} table segments",
+                            allocatedTables);
+                    }
+                }
+
                 break;
+            }
+            catch (Exception ex) when (IsOracle(db) && OracleDatabaseErrors.IsInvalidIdentifier(ex))
+            {
+                logger.LogError(ex, "Database initialization contains an invalid Oracle identifier; retrying cannot resolve this error");
+                throw;
             }
             catch (Exception ex) when (attempt < maxAttempts)
             {
                 logger.LogWarning(ex, "Database initialization attempt {Attempt}/{MaxAttempts} failed", attempt, maxAttempts);
+                if (IsOracle(db))
+                    await db.Database.CloseConnectionAsync();
                 await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            }
+            finally
+            {
+                if (IsOracle(db) && db.Database.GetDbConnection().State != ConnectionState.Closed)
+                    await db.Database.CloseConnectionAsync();
             }
         }
 
@@ -68,6 +111,63 @@ public static class DatabaseInitializer
 
         logger.LogInformation("Seeded demo users and products");
     }
+
+
+    private static bool IsOracle(AppDbContext db) =>
+        db.Database.ProviderName?.Contains("Oracle", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static async Task<int> EnsureOracleSegmentsAllocatedAsync(
+        AppDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var connection = db.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        var tablesWithoutSegments = (await ReadObjectNamesAsync(
+            connection,
+            "SELECT TABLE_NAME FROM USER_TABLES WHERE SEGMENT_CREATED = 'NO' ORDER BY TABLE_NAME",
+            cancellationToken))
+            .Where(CoreTableNames.Contains)
+            .ToList();
+
+        foreach (var tableName in tablesWithoutSegments)
+            await ExecuteDdlAsync(connection, $"ALTER TABLE {QuoteIdentifier(tableName)} ALLOCATE EXTENT", cancellationToken);
+
+        // Only segment materialization is required to avoid Oracle's deferred-segment
+        // first-write failure in SERIALIZABLE transactions. INITRANS is a separate
+        // physical tuning option and is intentionally not changed at application startup.
+        return tablesWithoutSegments.Count;
+    }
+
+    private static async Task<List<string>> ReadObjectNamesAsync(
+        DbConnection connection,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            names.Add(reader.GetString(0));
+
+        return names;
+    }
+
+    private static async Task ExecuteDdlAsync(
+        DbConnection connection,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static string QuoteIdentifier(string identifier) =>
+        "\"" + identifier.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
 
     private static User NewUser(string username, string password, string email, UserRole role) => new()
     {

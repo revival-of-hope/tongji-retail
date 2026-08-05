@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Models;
+using RetailSystem.Api.Services;
 
 namespace RetailSystem.Api.Tests;
 
@@ -32,6 +33,56 @@ public sealed class ImprovementTests
         var products = designTimeModel.FindEntityType(typeof(Product));
         Assert.NotNull(products);
         Assert.NotEmpty(products!.GetCheckConstraints());
+    }
+
+    [Fact]
+    public async Task Serializable_Executor_Retries_Oracle_08177_With_A_Fresh_Context()
+    {
+        await using var factory = new RetailApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var executor = scope.ServiceProvider.GetRequiredService<SerializableTransactionExecutor>();
+        var attempts = 0;
+        var contextIds = new List<Guid>();
+
+        var result = await executor.ExecuteAsync(async (db, cancellationToken) =>
+        {
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            attempts++;
+            contextIds.Add(db.ContextId.InstanceId);
+
+            if (attempts == 1)
+            {
+                throw new DbUpdateException(
+                    "Simulated Oracle write failure",
+                    new InvalidOperationException("ORA-08177: can't serialize access for this transaction"));
+            }
+
+            return 42;
+        }, CancellationToken.None);
+
+        Assert.Equal(42, result);
+        Assert.Equal(2, attempts);
+        Assert.Equal(2, contextIds.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Serializable_Executor_Does_Not_Retry_Non_Transient_Constraint_Errors()
+    {
+        await using var factory = new RetailApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var executor = scope.ServiceProvider.GetRequiredService<SerializableTransactionExecutor>();
+        var attempts = 0;
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => executor.ExecuteAsync<int>((_, _) =>
+        {
+            attempts++;
+            throw new DbUpdateException(
+                "Simulated unique constraint failure",
+                new InvalidOperationException("ORA-00001: unique constraint violated"));
+        }, CancellationToken.None));
+
+        Assert.Equal(1, attempts);
     }
 
     [Fact]

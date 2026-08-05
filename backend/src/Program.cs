@@ -38,6 +38,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         oracleOptions => oracleOptions.UseOracleSQLCompatibility(
             OracleSQLCompatibility.DatabaseVersion21)));
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<SerializableTransactionExecutor>();
 if (!builder.Environment.IsEnvironment("Testing") && !isOpenApiGeneration)
     builder.Services.AddHostedService<ExpiredOrderCleanupService>();
 

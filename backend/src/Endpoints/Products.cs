@@ -1,8 +1,6 @@
-using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Models;
@@ -271,30 +269,26 @@ public static class ProductEndpoints
         long id,
         CreateReviewRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
         if (request.Rating is < 1 or > 5) return ApiResults.BadRequest("评分必须为 1—5 星");
         if (request.Comment?.Trim().Length > 1000) return ApiResults.BadRequest("评价内容不能超过 1000 个字符");
 
-        IDbContextTransaction? transaction = null;
-        try
+        return await transactions.ExecuteAsync(async (db, ct) =>
         {
-            if (db.Database.IsRelational())
-                transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
             var userId = principal.GetUserId();
             var order = await db.Orders
                 .Include(item => item.Items)
                 .SingleOrDefaultAsync(
                     item => item.Id == request.OrderId && item.UserId == userId,
-                    cancellationToken);
+                    ct);
             if (order is null || order.Status != OrderStatus.Completed || order.Items.All(item => item.ProductId != id))
                 return ApiResults.BadRequest("只能评价本人已完成订单中的商品");
 
             if (await db.ProductReviews.AnyAsync(
                     review => review.OrderId == request.OrderId && review.ProductId == id,
-                    cancellationToken))
+                    ct))
                 return ApiResults.Conflict("该订单商品已经评价");
 
             var review = new ProductReview
@@ -306,26 +300,21 @@ public static class ProductEndpoints
                 Comment = NormalizeOptional(request.Comment)
             };
             db.ProductReviews.Add(review);
-            await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
 
             var aggregate = await db.ProductReviews
                 .Where(item => item.ProductId == id)
                 .GroupBy(_ => 1)
                 .Select(group => new { Count = group.Count(), Average = group.Average(item => item.Rating) })
-                .SingleAsync(cancellationToken);
-            var product = await db.Products.SingleAsync(item => item.Id == id, cancellationToken);
+                .SingleAsync(ct);
+            var product = await db.Products.SingleAsync(item => item.Id == id, ct);
             product.ReviewCount = aggregate.Count;
             product.AvgRating = Math.Round((decimal)aggregate.Average, 2);
-            await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(ct);
 
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
-            review.User = await db.Users.AsNoTracking().SingleAsync(item => item.Id == userId, cancellationToken);
+            review.User = await db.Users.AsNoTracking().SingleAsync(item => item.Id == userId, ct);
             return ApiResults.Created($"/api/products/{id}/reviews", review.ToResponse(), "评价成功");
-        }
-        finally
-        {
-            if (transaction is not null) await transaction.DisposeAsync();
-        }
+        }, cancellationToken);
     }
 
     private static async Task<IResult> GetCategoriesAsync(AppDbContext db, CancellationToken cancellationToken)
