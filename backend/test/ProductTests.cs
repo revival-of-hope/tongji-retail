@@ -28,7 +28,7 @@ public sealed class ProductTests
         using var client = factory.CreateClient();
         await client.LoginAsync("customer", "Customer123!");
 
-        var response = await client.PostAsJsonAsync("/api/products/", new CreateProductRequest(
+        var response = await client.PostAsApiJsonAsync("/api/products/", new CreateProductRequest(
             1, "Unauthorized product", null, 1m, 1, null));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -49,7 +49,7 @@ public sealed class ProductTests
 
         var detailResponse = await merchantClient.GetAsync($"/api/products/{product.Id}");
         var detail = await detailResponse.ReadDataAsync<ProductDetail>();
-        var update = await merchantClient.PutAsJsonAsync($"/api/products/{product.Id}", new UpdateProductRequest(
+        var update = await merchantClient.PutAsApiJsonAsync($"/api/products/{product.Id}", new UpdateProductRequest(
             detail.CategoryId,
             detail.Name + "（更新）",
             detail.Description,

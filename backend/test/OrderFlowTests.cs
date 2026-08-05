@@ -21,18 +21,18 @@ public sealed class OrderFlowTests
         var products = await productsResponse.ReadDataAsync<PagedResponse<ProductListItem>>();
         var product = Assert.Single(products.Items);
 
-        var addResponse = await client.PostAsJsonAsync("/api/cart/items", new AddCartItemRequest(product.Id, 2));
+        var addResponse = await client.PostAsApiJsonAsync("/api/cart/items", new AddCartItemRequest(product.Id, 2));
         Assert.Equal(HttpStatusCode.Created, addResponse.StatusCode);
         var cartItem = await addResponse.ReadDataAsync<CartItemResponse>();
 
-        var orderResponse = await client.PostAsJsonAsync("/api/orders/", new CreateOrderRequest(
+        var orderResponse = await client.PostAsApiJsonAsync("/api/orders/", new CreateOrderRequest(
             [cartItem.CartItemId], "上海市杨浦区四平路 1239 号", "integration test"));
         Assert.Equal(HttpStatusCode.Created, orderResponse.StatusCode);
         var order = await orderResponse.ReadDataAsync<OrderDetail>();
         Assert.Equal(OrderStatus.PendingPayment, order.Status);
         Assert.Equal(product.Price * 2, order.TotalAmount);
 
-        var payResponse = await client.PostAsJsonAsync($"/api/orders/{order.Id}/pay",
+        var payResponse = await client.PostAsApiJsonAsync($"/api/orders/{order.Id}/pay",
             new PayOrderRequest(PaymentMethod.Alipay));
         Assert.Equal(HttpStatusCode.OK, payResponse.StatusCode);
         var paidOrder = await payResponse.ReadDataAsync<OrderDetail>();
@@ -55,11 +55,11 @@ public sealed class OrderFlowTests
 
         var productPage = await (await client.GetAsync("/api/products/?pageSize=1"))
             .ReadDataAsync<PagedResponse<ProductListItem>>();
-        var add = await client.PostAsJsonAsync("/api/cart/items", new AddCartItemRequest(productPage.Items[0].Id, 1));
+        var add = await client.PostAsApiJsonAsync("/api/cart/items", new AddCartItemRequest(productPage.Items[0].Id, 1));
         var cartItem = await add.ReadDataAsync<CartItemResponse>();
-        var created = await client.PostAsJsonAsync("/api/orders/", new CreateOrderRequest([cartItem.CartItemId], "测试地址", null));
+        var created = await client.PostAsApiJsonAsync("/api/orders/", new CreateOrderRequest([cartItem.CartItemId], "测试地址", null));
         var order = await created.ReadDataAsync<OrderDetail>();
-        await client.PostAsJsonAsync($"/api/orders/{order.Id}/pay", new PayOrderRequest(PaymentMethod.WeChat));
+        await client.PostAsApiJsonAsync($"/api/orders/{order.Id}/pay", new PayOrderRequest(PaymentMethod.WeChat));
 
         var cancelled = await client.PutAsync($"/api/orders/{order.Id}/cancel", null);
 
@@ -115,12 +115,12 @@ public sealed class OrderFlowTests
             secondProductId = secondProduct.Id;
         }
 
-        var firstAdd = await client.PostAsJsonAsync("/api/cart/items", new AddCartItemRequest(firstProductId, 1));
+        var firstAdd = await client.PostAsApiJsonAsync("/api/cart/items", new AddCartItemRequest(firstProductId, 1));
         var firstItem = await firstAdd.ReadDataAsync<CartItemResponse>();
-        var secondAdd = await client.PostAsJsonAsync("/api/cart/items", new AddCartItemRequest(secondProductId, 1));
+        var secondAdd = await client.PostAsApiJsonAsync("/api/cart/items", new AddCartItemRequest(secondProductId, 1));
         var secondItem = await secondAdd.ReadDataAsync<CartItemResponse>();
 
-        var response = await client.PostAsJsonAsync("/api/orders/", new CreateOrderRequest(
+        var response = await client.PostAsApiJsonAsync("/api/orders/", new CreateOrderRequest(
             [firstItem.CartItemId, secondItem.CartItemId], "测试地址", null));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

@@ -24,6 +24,12 @@ RUN rm -rf src/bin src/obj test/bin test/obj \
         --disable-parallel \
         /p:RestoreFallbackFolders=
 
+# Generate the contract from the exact Linux build that will run the tests.
+# Program.cs detects the OpenAPI generator process and skips Oracle startup.
+RUN dotnet build src/RetailSystem.Api.csproj \
+    --configuration Release \
+    --no-restore
+
 RUN dotnet test test/RetailSystem.Api.Tests.csproj \
     --configuration Release \
     --no-restore \

@@ -14,7 +14,7 @@ public sealed class AuthenticationTests
         using var client = factory.CreateClient();
         var username = $"user_{Guid.NewGuid():N}"[..20];
 
-        var register = await client.PostAsJsonAsync("/api/auth/register",
+        var register = await client.PostAsApiJsonAsync("/api/auth/register",
             new RegisterRequest(username, "Password123!", $"{username}@example.com", null));
 
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);

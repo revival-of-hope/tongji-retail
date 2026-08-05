@@ -25,3 +25,10 @@ docker compose down --volumes
 ```
 
 数据库检查约束只会在新数据库中通过 `EnsureCreated` 创建。使用旧 Oracle 数据卷时，应先备份数据，再执行 `docker compose down --volumes` 创建新卷，或自行编写迁移脚本。
+
+## 2026-08-05 后端测试热修复
+
+- 测试客户端现在与正式 OpenAPI 契约一致，普通请求将 `PaymentMethod`、`TicketStatus` 等枚举序列化为字符串；数字枚举拒绝测试仍显式发送 `999`，正式接口的严格校验未被放宽。
+- 固定 12 表与检查约束测试改为读取 EF Core 设计时模型，避免运行时优化模型省略关系型约束元数据造成误判。
+- Docker 后端构建在执行测试前先构建 API 并重新生成 OpenAPI；GitHub Actions 同样先刷新并检查契约，再编译和运行测试。
+- 本次修改对应此前 7 个失败用例的三类根因：5 个枚举请求格式失败、1 个模型元数据读取失败、1 个 OpenAPI 契约未刷新。

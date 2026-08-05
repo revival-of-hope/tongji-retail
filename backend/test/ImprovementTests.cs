@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using RetailSystem.Api.Contracts;
 using RetailSystem.Api.Data;
@@ -17,14 +19,15 @@ public sealed class ImprovementTests
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var tables = db.Model.GetEntityTypes()
+        var designTimeModel = db.GetService<IDesignTimeModel>().Model;
+        var tables = designTimeModel.GetEntityTypes()
             .Select(entity => entity.GetTableName())
             .Where(table => table is not null)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
         Assert.Equal(12, tables.Length);
-        var products = db.Model.FindEntityType(typeof(Product));
+        var products = designTimeModel.FindEntityType(typeof(Product));
         Assert.NotNull(products);
         Assert.NotEmpty(products!.GetCheckConstraints());
     }
@@ -110,7 +113,7 @@ public sealed class ImprovementTests
         await client.LoginAsync("customer", "Customer123!");
         var order = await CreatePendingOrderAsync(client);
 
-        var pay = await client.PostAsJsonAsync(
+        var pay = await client.PostAsApiJsonAsync(
             $"/api/orders/{order.Id}/pay",
             new PayOrderRequest(PaymentMethod.Alipay));
         Assert.Equal(HttpStatusCode.OK, pay.StatusCode);
@@ -123,7 +126,7 @@ public sealed class ImprovementTests
         var complete = await client.PutAsync($"/api/orders/{order.Id}/complete", null);
         Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
 
-        var review = await client.PostAsJsonAsync(
+        var review = await client.PostAsApiJsonAsync(
             $"/api/products/{order.Items[0].ProductId}/reviews",
             new CreateReviewRequest(order.Id, 5, "很好"));
         Assert.Equal(HttpStatusCode.Created, review.StatusCode);
@@ -142,7 +145,7 @@ public sealed class ImprovementTests
         await client.LoginAsync("customer", "Customer123!");
         var order = await CreatePendingOrderAsync(client);
 
-        var pay = await client.PostAsJsonAsync(
+        var pay = await client.PostAsApiJsonAsync(
             $"/api/orders/{order.Id}/pay",
             new PayOrderRequest(PaymentMethod.Alipay));
         Assert.Equal(HttpStatusCode.OK, pay.StatusCode);
@@ -173,6 +176,8 @@ public sealed class ImprovementTests
         await client.LoginAsync("customer", "Customer123!");
         var order = await CreatePendingOrderAsync(client);
 
+        // Deliberately bypass PostAsApiJsonAsync so the payload contains a JSON number.
+        // The production API must reject numeric enum input instead of accepting 999.
         var response = await client.PostAsJsonAsync(
             $"/api/orders/{order.Id}/pay",
             new { paymentMethod = 999 });
@@ -190,12 +195,12 @@ public sealed class ImprovementTests
         var products = await productsResponse.ReadDataAsync<PagedResponse<ProductListItem>>();
         var product = Assert.Single(products.Items);
 
-        var addResponse = await client.PostAsJsonAsync(
+        var addResponse = await client.PostAsApiJsonAsync(
             "/api/cart/items",
             new AddCartItemRequest(product.Id, 1));
         var cartItem = await addResponse.ReadDataAsync<CartItemResponse>();
 
-        var orderResponse = await client.PostAsJsonAsync(
+        var orderResponse = await client.PostAsApiJsonAsync(
             "/api/orders/",
             new CreateOrderRequest([cartItem.CartItemId], "测试地址", null));
         Assert.Equal(HttpStatusCode.Created, orderResponse.StatusCode);

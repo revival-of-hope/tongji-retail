@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { CreditCard } from "lucide-react"
 import { toast } from "sonner"
@@ -41,7 +41,7 @@ export default function PayPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [method, setMethod] = useState<PaymentMethod>("Alipay")
   const [paying, setPaying] = useState(false)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState<number | null>(null)
   const refreshedAfterExpiry = useRef(false)
 
   useEffect(() => {
@@ -53,7 +53,10 @@ export default function PayPage() {
 
     void api
       .order(id)
-      .then(setOrder)
+      .then((loadedOrder) => {
+        setOrder(loadedOrder)
+        setNow(Date.now())
+      })
       .catch((error) => toast.error(error instanceof Error ? error.message : "订单加载失败"))
   }, [id, router])
 
@@ -62,18 +65,20 @@ export default function PayPage() {
     return () => window.clearInterval(timer)
   }, [])
 
-  const remaining = useMemo(
-    () => (order ? new Date(order.expireAt).getTime() - now : 0),
-    [now, order],
+  const remaining = order && now !== null ? Date.parse(order.expireAt) - now : null
+  const expired = Boolean(
+    order && order.status === "PendingPayment" && remaining !== null && remaining <= 0,
   )
-  const expired = Boolean(order && order.status === "PendingPayment" && remaining <= 0)
 
   useEffect(() => {
     if (!expired || refreshedAfterExpiry.current) return
     refreshedAfterExpiry.current = true
     void api
       .order(id)
-      .then(setOrder)
+      .then((loadedOrder) => {
+        setOrder(loadedOrder)
+        setNow(Date.now())
+      })
       .catch(() => undefined)
   }, [expired, id])
 
@@ -88,6 +93,7 @@ export default function PayPage() {
       toast.error(error instanceof Error ? error.message : "支付失败")
       try {
         setOrder(await api.order(id))
+        setNow(Date.now())
       } catch {
         // Keep the original error visible when refreshing the order also fails.
       }
@@ -123,7 +129,11 @@ export default function PayPage() {
                     <p>支付截止：{dateTime(order.expireAt)}</p>
                     {order.status === "PendingPayment" && (
                       <p className={expired ? "font-medium text-destructive" : "font-medium text-foreground"}>
-                        {expired ? "支付期限已结束" : `剩余时间：${formatRemaining(remaining)}`}
+                        {expired
+                          ? "支付期限已结束"
+                          : remaining === null
+                            ? "正在同步支付期限…"
+                            : `剩余时间：${formatRemaining(remaining)}`}
                       </p>
                     )}
                   </div>

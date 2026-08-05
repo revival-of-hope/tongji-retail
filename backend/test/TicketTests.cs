@@ -17,7 +17,7 @@ public sealed class TicketTests
 
         using var customerClient = factory.CreateClient();
         await customerClient.LoginAsync("customer", "Customer123!");
-        var createResponse = await customerClient.PostAsJsonAsync(
+        var createResponse = await customerClient.PostAsApiJsonAsync(
             "/api/tickets/",
             new CreateTicketRequest(null, "测试工单", "需要客服协助处理"));
 
@@ -67,7 +67,7 @@ public sealed class TicketTests
         var tickets = await listResponse.ReadDataAsync<IReadOnlyList<TicketResponse>>();
         Assert.Contains(tickets, ticket => ticket.Id == ticketId && ticket.AssignedTo is null);
 
-        var replyResponse = await serviceClient.PutAsJsonAsync(
+        var replyResponse = await serviceClient.PutAsApiJsonAsync(
             $"/api/tickets/{ticketId}/reply",
             new ReplyTicketRequest("已接单处理", TicketStatus.Processing));
 
