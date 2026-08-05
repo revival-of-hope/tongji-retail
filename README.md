@@ -1,6 +1,15 @@
-# 商品零售管理系统
+# Tongji-Retail
 
-一套前后端分离的课程项目，覆盖顾客、商家、管理员、客服四类角色。接口以 ASP.NET Core 生成的 OpenAPI 文档为唯一契约，前端客户端由该契约自动生成。
+本系统以电商平台为业务背景，采用前后端分离架构（C# ASP.NET Core 9 + EntityFrameworkCore 9;  Next.js 14 + Shadcn UI组件库; Oracle 21c）。系统涵盖顾客、商家、管理员、客服四大角色。使用docker compose进行部署
+## 项目分工
+| Docker 与统筹 | 前端              | 后端             | 数据库设计与文档撰写 |
+| ------------- | ----------------- | ---------------- | -------------------- |
+| 周禹佟        | frontend01 宋博文 | backend01 宁子谦 | 熊庭楷               |
+|               | frontend02 李晨恺 | backend02 刘礼嘉 | 赖浩翔               |
+|               | frontend03 刘子康 | backend03 付林轩 | 杜冰焱               |
+
+>请Fork后在本地完成对应功能后再提交到自己的Fork仓库,最后再提交Pull Request就可以了.
+
 
 ## 技术栈
 
@@ -21,6 +30,8 @@
 
 ```bash
 cp .env.example .env
+# 若已有数据卷还需先运行以下命令来删除
+# docker compose down -v
 docker compose up --build
 ```
 
@@ -35,12 +46,12 @@ docker compose up --build
 
 ## 演示账号
 
-| 角色 | 用户名 | 密码 |
-|---|---|---|
-| 管理员 | `admin` | `Admin123!` |
-| 顾客 | `customer` | `Customer123!` |
-| 商家 | `merchant` | `Merchant123!` |
-| 客服 | `service` | `Service123!` |
+| 角色   | 用户名     | 密码           |
+| ------ | ---------- | -------------- |
+| 管理员 | `admin`    | `Admin123!`    |
+| 顾客   | `customer` | `Customer123!` |
+| 商家   | `merchant` | `Merchant123!` |
+| 客服   | `service`  | `Service123!`  |
 
 商家申请审核通过后，旧 JWT 中仍保留原角色，申请人需要重新登录以取得商家权限。
 
@@ -84,26 +95,3 @@ sh ./scripts/smoke-test.sh
 ```
 
 仓库内置 `.github/workflows/ci.yml`，会在推送和拉取请求时执行后端构建与测试、OpenAPI/生成客户端漂移检查、前端 lint/类型检查/测试/构建，以及 Oracle 端到端冒烟测试。
-
-## 关键业务约束
-
-一个订单只允许包含同一商家的商品。现有 12 表结构没有订单—商家拆单表，该约束可保证单个订单的发货责任和状态流转唯一；跨商家商品需分开结算。
-
-更多说明见：
-
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/testing.md`
-- `backend/docs/database.md`
-- `frontend/docs/openapi-client.md`
-
-## 角色导航说明
-
-- 顾客直接使用商城、购物车、订单、客服工单和商家入驻页面，不设置独立工作台。
-- `/merchant/apply` 是顾客可访问的独立申请页，不继承商家工作台的权限布局。
-- 商家工作台仍位于 `/merchant`，仅审核通过后的商家账号可访问。
-- 客服工作台显示分配给当前客服以及尚未分配的工单；客服回复未分配工单时自动接单。
-
-## Merchant route layout note
-
-The `/merchant` dashboard routes and `/merchant/apply` customer application route must remain under the same `frontend/app/merchant` route tree. Next.js 16 does not allow the same URL segment tree to be split across route groups such as `(merchant-dashboard)/merchant` and `(shop)/merchant`.
