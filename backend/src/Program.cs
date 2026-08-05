@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using RetailSystem.Api.Data;
 using RetailSystem.Api.Endpoints;
 using RetailSystem.Api.Middleware;
+using RetailSystem.Api.Serialization;
 using RetailSystem.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,9 @@ if (!builder.Environment.IsEnvironment("Testing") && !isOpenApiGeneration)
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
+    // Oracle does not preserve DateTime.Kind. All application timestamps are
+    // stored as UTC, so restore the UTC marker before serializing API output.
+    options.SerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
 });
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
