@@ -1,9 +1,9 @@
 ## 任务安排
 ### 后端
-#### 7.30前
-1. backend01
-2. backend02
-3. backend03
+#### 9.1前
+1. backend01: 熟悉Contracts和Models编写方式,对应src文件夹下的同名文件夹
+2. backend02: 熟悉MiddleWare和JWT,OAuth2等概念,测试文件夹中的主要功能测试要能说个道道出来
+3. backend03: 熟悉Endpoints编写和Openapi文档使用,可根据Program.cs主文件来学习
 
 #### 7.15前
 1. 新建一个该项目的分支backend01,将backend/src/Models中的空文件用backend/docs文件夹中的数据库设计文档来填充,要用到的是EntityFrameworkCore9的写法.
@@ -12,7 +12,10 @@
 
 第1个和第3个任务如果不会需要可以去学习一下,或者参考群里发的书😄
 ### 前端
-#### 7.30前
+#### 9.1前
+1. frontend01: 熟悉OpenAPI文档对应的基本路由,能基本明白hey-api生成的lib/api文件夹下的内容,能够看懂sdk.ts文件
+2. frontend02: 熟悉Tailwind CSS的基本语法,components文件夹下的非shadcn组件要能说个所以然出来,并搞明白app文件夹中的主要page里的组件编排方式
+3. frontend03: 熟悉Zustand,看明白app文件夹中各主要页面的状态管理方式,测试文件夹中的主要功能测试要能说个道道出来
 
 #### 7.15前
 1. 新建一个分支frontend01,学习next.js的app router编写方式,并实现如frontend/docs中的api.js中展示的所有测试路由.

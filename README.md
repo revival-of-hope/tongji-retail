@@ -8,6 +8,7 @@
 |               | frontend02 李晨恺 | backend02 刘礼嘉 | 赖浩翔               |
 |               | frontend03 刘子康 | backend03 付林轩 | 杜冰焱               |
 
+>[!NOTE]
 >请Fork后在本地完成对应功能后再提交到自己的Fork仓库,最后再提交Pull Request就可以了.
 
 
@@ -32,7 +33,7 @@
 cp .env.example .env
 # 若已有数据卷还需先运行以下命令来删除
 # docker compose down -v
-docker compose up --build
+docker compose up --build -d
 ```
 
 启动后：
