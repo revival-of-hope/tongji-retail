@@ -1,0 +1,105 @@
+name: CI
+
+"on":
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore
+        run: dotnet restore backend/test/RetailSystem.Api.Tests.csproj
+      - name: Build API and tests
+        run: dotnet build backend/test/RetailSystem.Api.Tests.csproj --configuration Release --no-restore
+      - name: Verify checked-in OpenAPI document
+        run: git diff --exit-code -- backend/openapi/retail-system.json
+      - name: Run backend tests
+        run: dotnet test backend/test/RetailSystem.Api.Tests.csproj --configuration Release --no-restore --no-build --logger "trx;LogFileName=backend-tests.trx"
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: backend/test/TestResults/**/*.trx
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Regenerate API client
+        working-directory: frontend
+        run: pnpm generate:api
+      - name: Verify generated API client
+        run: git diff --exit-code -- frontend/lib/api/generated
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+      - name: Type check
+        working-directory: frontend
+        run: pnpm typecheck
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm test
+      - name: Production build
+        working-directory: frontend
+        run: pnpm build
+
+  docker-smoke:
+    name: Oracle end-to-end smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start application stack
+        env:
+          ORACLE_PASSWORD: GitHubActionsOracle2026!
+          DB_PASSWORD: GitHubActionsDb2026!
+          JWT_SECRET_KEY: GitHub_Actions_Retail_System_Secret_Key_2026_Change_Me
+        run: docker compose up --build --detach --wait --wait-timeout 600
+      - name: Run complete business smoke test
+        run: sh ./scripts/smoke-test.sh
+      - name: Collect container logs
+        if: failure()
+        run: docker compose logs --no-color > docker-compose.log 2>&1 || true
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-logs
+          path: docker-compose.log
+          if-no-files-found: ignore
+      - name: Stop application stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

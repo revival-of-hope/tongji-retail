@@ -1,0 +1,17 @@
+@host = http://localhost:8080
+
+GET {{host}}/health
+Accept: application/json
+
+###
+GET {{host}}/openapi/v1.json
+Accept: application/json
+
+###
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "customer",
+  "password": "Customer123!"
+}
