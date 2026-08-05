@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -103,6 +105,49 @@ public sealed class ImprovementTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var orders = await response.ReadDataAsync<IReadOnlyList<OrderSummary>>();
         Assert.Equal(OrderStatus.Cancelled, Assert.Single(orders, item => item.Id == order.Id).Status);
+    }
+
+    [Fact]
+    public async Task Oracle_Unspecified_DateTimes_Are_Serialized_As_Utc()
+    {
+        await using var factory = new RetailApiFactory();
+        using var client = factory.CreateClient();
+        await client.LoginAsync("customer", "Customer123!");
+
+        var order = await CreatePendingOrderAsync(client);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var entity = await db.Orders.SingleAsync(item => item.Id == order.Id);
+
+            // Oracle DATE/TIMESTAMP keeps the clock value but does not retain
+            // DateTime.Kind. Simulate that materialization behavior here.
+            entity.ExpireAt = DateTime.SpecifyKind(entity.ExpireAt, DateTimeKind.Unspecified);
+            entity.CreatedAt = DateTime.SpecifyKind(entity.CreatedAt, DateTimeKind.Unspecified);
+            entity.UpdatedAt = DateTime.SpecifyKind(entity.UpdatedAt, DateTimeKind.Unspecified);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.GetAsync($"/api/orders/{order.Id}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+
+        foreach (var propertyName in new[] { "expireAt", "createdAt", "updatedAt" })
+        {
+            var text = data.GetProperty(propertyName).GetString();
+            Assert.False(string.IsNullOrWhiteSpace(text));
+            Assert.True(
+                text!.EndsWith("Z", StringComparison.OrdinalIgnoreCase),
+                $"{propertyName} 应以 UTC 的 Z 后缀输出，实际值为：{text}");
+
+            var parsed = DateTimeOffset.Parse(
+                text!,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None);
+            Assert.Equal(TimeSpan.Zero, parsed.Offset);
+        }
     }
 
     [Fact]
