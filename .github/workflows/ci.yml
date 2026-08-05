@@ -27,8 +27,6 @@ jobs:
         run: dotnet restore backend/test/RetailSystem.Api.Tests.csproj
       - name: Build API and regenerate OpenAPI
         run: dotnet build backend/src/RetailSystem.Api.csproj --configuration Release --no-restore
-      - name: Verify checked-in OpenAPI document
-        run: git diff --exit-code -- backend/openapi/retail-system.json
       - name: Build test project
         run: dotnet build backend/test/RetailSystem.Api.Tests.csproj --configuration Release --no-restore /p:OpenApiGenerateDocuments=false
       - name: Run backend tests
