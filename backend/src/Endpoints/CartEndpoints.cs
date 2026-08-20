@@ -98,6 +98,7 @@ public static class CartEndpoints
 
     private static async Task<IResult> UpdateItemAsync(long cartItemId, UpdateCartItemRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancellationToken)
     {
+        if (cartItemId <= 0) return ApiResults.BadRequest("购物车商品编号无效");
         if (request.Quantity <= 0) return ApiResults.BadRequest("数量必须大于 0；删除商品请使用 DELETE 接口");
         var userId = principal.GetUserId();
         var item = await CartItemsQuery(db).SingleOrDefaultAsync(x => x.Id == cartItemId && x.Cart.UserId == userId, cancellationToken);
@@ -112,6 +113,7 @@ public static class CartEndpoints
 
     private static async Task<IResult> DeleteItemAsync(long cartItemId, ClaimsPrincipal principal, AppDbContext db, CancellationToken cancellationToken)
     {
+        if (cartItemId <= 0) return ApiResults.BadRequest("购物车商品编号无效");
         var userId = principal.GetUserId();
         var item = await db.CartItems.Include(x => x.Cart).SingleOrDefaultAsync(x => x.Id == cartItemId && x.Cart.UserId == userId, cancellationToken);
         if (item is null) return ApiResults.NotFound("购物车商品不存在");
