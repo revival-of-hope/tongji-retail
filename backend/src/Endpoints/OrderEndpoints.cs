@@ -153,6 +153,7 @@ public static class OrderEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("订单编号无效");
         await OrderMaintenance.ExpirePendingOrdersAsync(db, cancellationToken, orderId: id);
         var order = await OrderQuery(db)
             .AsNoTracking()
@@ -174,6 +175,7 @@ public static class OrderEndpoints
         SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("订单编号无效");
         if (!Enum.IsDefined(request.PaymentMethod)) return ApiResults.BadRequest("支付方式无效");
 
         return await transactions.ExecuteAsync(async (db, ct) =>
@@ -227,6 +229,7 @@ public static class OrderEndpoints
         SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("订单编号无效");
         return await transactions.ExecuteAsync(async (db, ct) =>
         {
             var userId = principal.GetUserId();
@@ -249,6 +252,7 @@ public static class OrderEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("订单编号无效");
         var order = await OrderQuery(db).SingleOrDefaultAsync(
             item => item.Id == id && item.UserId == principal.GetUserId(),
             cancellationToken);
@@ -269,6 +273,7 @@ public static class OrderEndpoints
     {
         return await transactions.ExecuteAsync(async (db, ct) =>
         {
+            if (id <= 0) return ApiResults.BadRequest("订单编号无效");
             var order = await OrderQuery(db).SingleOrDefaultAsync(
                 item => item.Id == id && item.UserId == principal.GetUserId(),
                 ct);
