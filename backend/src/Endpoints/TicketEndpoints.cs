@@ -112,6 +112,7 @@ public static class TicketEndpoints
         SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("工单编号无效");
         if (string.IsNullOrWhiteSpace(request.Reply) || request.Reply.Trim().Length > 2000)
             return ApiResults.BadRequest("回复不能为空且不能超过 2000 个字符");
         if (!Enum.IsDefined(request.Status)) return ApiResults.BadRequest("工单状态无效");
