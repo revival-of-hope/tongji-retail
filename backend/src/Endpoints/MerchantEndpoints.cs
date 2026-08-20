@@ -99,6 +99,7 @@ public static class MerchantEndpoints
 
     private static async Task<IResult> ReviewAsync(long id, ReviewMerchantRequest request, AppDbContext db, CancellationToken cancellationToken)
     {
+        if (id <= 0) return ApiResults.BadRequest("商家申请编号无效");
         var merchant = await db.Merchants.Include(x => x.User).SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (merchant is null) return ApiResults.NotFound("商家申请不存在");
         if (merchant.Status != MerchantStatus.Pending) return ApiResults.Conflict("该商家申请已完成审核");
