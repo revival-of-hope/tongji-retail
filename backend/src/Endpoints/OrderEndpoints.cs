@@ -70,16 +70,15 @@ public static class OrderEndpoints
         SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
-        if (request.CartItemIds is null || request.CartItemIds.Count == 0)
-            return ApiResults.BadRequest("至少选择一件购物车商品");
-        if (request.CartItemIds.Count > 100) return ApiResults.BadRequest("单次结算不能超过 100 种商品");
-        if (string.IsNullOrWhiteSpace(request.ShippingAddress) || request.ShippingAddress.Trim().Length > 500)
-            return ApiResults.BadRequest("收货地址不能为空且不能超过 500 个字符");
-        if (request.Remark?.Trim().Length > 500) return ApiResults.BadRequest("订单备注不能超过 500 个字符");
-        if (request.CartItemIds.Any(id => id <= 0)) return ApiResults.BadRequest("购物车商品编号无效");
+        var validationError = OrderValidation.Create(
+            request.CartItemIds,
+            request.ShippingAddress,
+            request.Remark);
+
+        if (validationError is not null)
+            return ApiResults.BadRequest(validationError);
 
         var ids = request.CartItemIds.Distinct().ToArray();
-        if (ids.Length != request.CartItemIds.Count) return ApiResults.BadRequest("购物车商品不能重复选择");
 
         return await transactions.ExecuteAsync(async (db, ct) =>
         {
