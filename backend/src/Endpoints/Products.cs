@@ -139,17 +139,22 @@ public static class ProductEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
+        if (id <= 0)
+            return ApiResults.BadRequest("商品编号无效");
+
         var product = await ProductQueryBase(db)
             .AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
-        if (product is null) return ApiResults.NotFound("商品不存在");
-        if (product.Status == ProductStatus.OnSale) return ApiResults.Ok(product.ToDetail());
+            .SingleOrDefaultAsync(
+                item => item.Id == id,
+                cancellationToken);
 
-        var canInspectNonPublicProduct = principal.Identity?.IsAuthenticated == true &&
-            (principal.IsInRole(nameof(UserRole.Admin)) ||
-             (principal.IsInRole(nameof(UserRole.Merchant)) && product.Merchant.UserId == principal.GetUserId()));
+        if (product is null)
+            return ApiResults.NotFound("商品不存在");
 
-        return canInspectNonPublicProduct
+        if (product.Status == ProductStatus.OnSale)
+            return ApiResults.Ok(product.ToDetail());
+
+        return CanInspectNonPublicProduct(product, principal)
             ? ApiResults.Ok(product.ToDetail())
             : ApiResults.NotFound("商品不存在或未上架");
     }
@@ -160,21 +165,35 @@ public static class ProductEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
+        if (request.CategoryId <= 0)
+            return ApiResults.BadRequest("商品分类编号无效");
+
         var error = Validation.Product(
             request.Name,
             request.Description,
             request.Price,
             request.StockQuantity,
             request.ImageUrls);
-        if (error is not null) return ApiResults.BadRequest(error);
-        if (!await db.Categories.AnyAsync(category => category.Id == request.CategoryId, cancellationToken))
+
+        if (error is not null)
+            return ApiResults.BadRequest(error);
+
+        if (!await db.Categories.AnyAsync(
+                category => category.Id == request.CategoryId,
+                cancellationToken))
+        {
             return ApiResults.BadRequest("商品分类不存在");
+        }
 
         var merchant = await db.Merchants.SingleOrDefaultAsync(
             item => item.UserId == principal.GetUserId(),
             cancellationToken);
-        if (merchant is null || merchant.Status != MerchantStatus.Approved)
+
+        if (merchant is null ||
+            merchant.Status != MerchantStatus.Approved)
+        {
             return ApiResults.Forbidden("商家尚未通过审核");
+        }
 
         var product = new Product
         {
@@ -187,11 +206,20 @@ public static class ProductEndpoints
             Status = ProductStatus.PendingReview,
             Images = BuildImages(request.ImageUrls)
         };
+
         db.Products.Add(product);
+
         await db.SaveChangesAsync(cancellationToken);
 
-        product = await ProductQueryBase(db).SingleAsync(item => item.Id == product.Id, cancellationToken);
-        return ApiResults.Created($"/api/products/{product.Id}", product.ToDetail(), "商品已提交审核");
+        product = await ProductQueryBase(db)
+            .SingleAsync(
+                item => item.Id == product.Id,
+                cancellationToken);
+
+        return ApiResults.Created(
+            $"/api/products/{product.Id}",
+            product.ToDetail(),
+            "商品已提交审核");
     }
 
     private static async Task<IResult> UpdateProductAsync(
@@ -201,21 +229,39 @@ public static class ProductEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
+        if (id <= 0)
+            return ApiResults.BadRequest("商品编号无效");
+
+        if (request.CategoryId <= 0)
+            return ApiResults.BadRequest("商品分类编号无效");
+
         var error = Validation.Product(
             request.Name,
             request.Description,
             request.Price,
             request.StockQuantity,
             request.ImageUrls);
-        if (error is not null) return ApiResults.BadRequest(error);
-        if (!await db.Categories.AnyAsync(category => category.Id == request.CategoryId, cancellationToken))
+
+        if (error is not null)
+            return ApiResults.BadRequest(error);
+
+        if (!await db.Categories.AnyAsync(
+                category => category.Id == request.CategoryId,
+                cancellationToken))
+        {
             return ApiResults.BadRequest("商品分类不存在");
+        }
 
         var product = await db.Products
             .Include(item => item.Images)
             .Include(item => item.Merchant)
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
-        if (product is null) return ApiResults.NotFound("商品不存在");
+            .SingleOrDefaultAsync(
+                item => item.Id == id,
+                cancellationToken);
+
+        if (product is null)
+            return ApiResults.NotFound("商品不存在");
+
         if (product.Merchant.UserId != principal.GetUserId())
             return ApiResults.Forbidden("不能修改其他商家的商品");
 
@@ -225,13 +271,23 @@ public static class ProductEndpoints
         product.Price = request.Price;
         product.StockQuantity = request.StockQuantity;
         product.UpdatedAt = DateTime.UtcNow;
+
+        // 商家修改商品后必须重新经过管理员审核。
         product.Status = ProductStatus.PendingReview;
+
         db.ProductImages.RemoveRange(product.Images);
         product.Images = BuildImages(request.ImageUrls);
+
         await db.SaveChangesAsync(cancellationToken);
 
-        product = await ProductQueryBase(db).SingleAsync(item => item.Id == id, cancellationToken);
-        return ApiResults.Ok(product.ToDetail(), "商品已更新并重新提交审核");
+        product = await ProductQueryBase(db)
+            .SingleAsync(
+                item => item.Id == id,
+                cancellationToken);
+
+        return ApiResults.Ok(
+            product.ToDetail(),
+            "商品已更新并重新提交审核");
     }
 
     private static async Task<IResult> ReviewProductAsync(
@@ -240,20 +296,59 @@ public static class ProductEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
-        var product = await ProductQueryBase(db).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
-        if (product is null) return ApiResults.NotFound("商品不存在");
-        if (product.Status != ProductStatus.PendingReview) return ApiResults.Conflict("该商品已完成审核");
+        if (id <= 0)
+            return ApiResults.BadRequest("商品编号无效");
 
-        product.Status = request.Approved ? ProductStatus.OnSale : ProductStatus.Rejected;
+        var product = await ProductQueryBase(db)
+            .SingleOrDefaultAsync(
+                item => item.Id == id,
+                cancellationToken);
+
+        if (product is null)
+            return ApiResults.NotFound("商品不存在");
+
+        if (product.Status != ProductStatus.PendingReview)
+            return ApiResults.Conflict("该商品已完成审核");
+
+        product.Status = request.Approved
+            ? ProductStatus.OnSale
+            : ProductStatus.Rejected;
+
         product.UpdatedAt = DateTime.UtcNow;
+
         await db.SaveChangesAsync(cancellationToken);
-        return ApiResults.Ok(product.ToDetail(), request.Approved ? "商品审核通过" : "商品审核拒绝");
+
+        return ApiResults.Ok(
+            product.ToDetail(),
+            request.Approved
+                ? "商品审核通过"
+                : "商品审核拒绝");
     }
 
-    private static async Task<IResult> GetReviewsAsync(long id, AppDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> GetReviewsAsync(
+        long id,
+        ClaimsPrincipal principal,
+        AppDbContext db,
+        CancellationToken cancellationToken)
     {
-        if (!await db.Products.AnyAsync(product => product.Id == id, cancellationToken))
+        if (id <= 0)
+            return ApiResults.BadRequest("商品编号无效");
+
+        var product = await db.Products
+            .AsNoTracking()
+            .Include(item => item.Merchant)
+            .SingleOrDefaultAsync(
+                item => item.Id == id,
+                cancellationToken);
+
+        if (product is null)
             return ApiResults.NotFound("商品不存在");
+
+        if (product.Status != ProductStatus.OnSale &&
+            !CanInspectNonPublicProduct(product, principal))
+        {
+            return ApiResults.NotFound("商品不存在或未上架");
+        }
 
         var reviews = await db.ProductReviews
             .AsNoTracking()
@@ -261,8 +356,11 @@ public static class ProductEndpoints
             .Where(review => review.ProductId == id)
             .OrderByDescending(review => review.CreatedAt)
             .ToListAsync(cancellationToken);
+
         return ApiResults.Ok<IReadOnlyList<ProductReviewResponse>>(
-            reviews.Select(review => review.ToResponse()).ToArray());
+            reviews
+                .Select(review => review.ToResponse())
+                .ToArray());
     }
 
     private static async Task<IResult> CreateReviewAsync(
@@ -272,24 +370,44 @@ public static class ProductEndpoints
         SerializableTransactionExecutor transactions,
         CancellationToken cancellationToken)
     {
-        if (request.Rating is < 1 or > 5) return ApiResults.BadRequest("评分必须为 1—5 星");
-        if (request.Comment?.Trim().Length > 1000) return ApiResults.BadRequest("评价内容不能超过 1000 个字符");
+        var validationError = Validation.ProductReview(
+            id,
+            request.OrderId,
+            request.Rating,
+            request.Comment);
+
+        if (validationError is not null)
+            return ApiResults.BadRequest(validationError);
 
         return await transactions.ExecuteAsync(async (db, ct) =>
         {
             var userId = principal.GetUserId();
+
             var order = await db.Orders
                 .Include(item => item.Items)
                 .SingleOrDefaultAsync(
-                    item => item.Id == request.OrderId && item.UserId == userId,
+                    item =>
+                        item.Id == request.OrderId &&
+                        item.UserId == userId,
                     ct);
-            if (order is null || order.Status != OrderStatus.Completed || order.Items.All(item => item.ProductId != id))
-                return ApiResults.BadRequest("只能评价本人已完成订单中的商品");
+
+            if (order is null ||
+                order.Status != OrderStatus.Completed ||
+                order.Items.All(item => item.ProductId != id))
+            {
+                return ApiResults.BadRequest(
+                    "只能评价本人已完成订单中的商品");
+            }
 
             if (await db.ProductReviews.AnyAsync(
-                    review => review.OrderId == request.OrderId && review.ProductId == id,
+                    review =>
+                        review.OrderId == request.OrderId &&
+                        review.ProductId == id,
                     ct))
-                return ApiResults.Conflict("该订单商品已经评价");
+            {
+                return ApiResults.Conflict(
+                    "该订单商品已经评价");
+            }
 
             var review = new ProductReview
             {
@@ -299,21 +417,42 @@ public static class ProductEndpoints
                 Rating = request.Rating,
                 Comment = NormalizeOptional(request.Comment)
             };
+
             db.ProductReviews.Add(review);
+
             await db.SaveChangesAsync(ct);
 
             var aggregate = await db.ProductReviews
                 .Where(item => item.ProductId == id)
                 .GroupBy(_ => 1)
-                .Select(group => new { Count = group.Count(), Average = group.Average(item => item.Rating) })
+                .Select(group => new
+                {
+                    Count = group.Count(),
+                    Average = group.Average(item => item.Rating)
+                })
                 .SingleAsync(ct);
-            var product = await db.Products.SingleAsync(item => item.Id == id, ct);
+
+            var product = await db.Products
+                .SingleAsync(
+                    item => item.Id == id,
+                    ct);
+
             product.ReviewCount = aggregate.Count;
-            product.AvgRating = Math.Round((decimal)aggregate.Average, 2);
+            product.AvgRating =
+                Math.Round((decimal)aggregate.Average, 2);
+
             await db.SaveChangesAsync(ct);
 
-            review.User = await db.Users.AsNoTracking().SingleAsync(item => item.Id == userId, ct);
-            return ApiResults.Created($"/api/products/{id}/reviews", review.ToResponse(), "评价成功");
+            review.User = await db.Users
+                .AsNoTracking()
+                .SingleAsync(
+                    item => item.Id == userId,
+                    ct);
+
+            return ApiResults.Created(
+                $"/api/products/{id}/reviews",
+                review.ToResponse(),
+                "评价成功");
         }, cancellationToken);
     }
 
@@ -365,6 +504,20 @@ public static class ProductEndpoints
         .Include(product => product.Merchant)
         .Include(product => product.Category)
         .Include(product => product.Images);
+
+    private static bool CanInspectNonPublicProduct(
+        Product product,
+        ClaimsPrincipal principal)
+    {
+        if (principal.Identity?.IsAuthenticated != true)
+            return false;
+
+        if (principal.IsInRole(nameof(UserRole.Admin)))
+            return true;
+
+        return principal.IsInRole(nameof(UserRole.Merchant)) &&
+            product.Merchant.UserId == principal.GetUserId();
+    }
 
     private static List<ProductImage> BuildImages(IReadOnlyList<string>? urls)
     {

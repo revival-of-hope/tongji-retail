@@ -8,6 +8,7 @@ public static class Validation
     public const int MaxProductDescriptionLength = 5_000;
     public const int MaxImageCount = 8;
     public const int MaxImageUrlLength = 500;
+    public const int MaxReviewCommentLength = 1_000;
 
     private static readonly HashSet<string> ProductSortOptions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -95,6 +96,27 @@ public static class Validation
             return "最低价格不能高于最高价格";
         if (string.IsNullOrWhiteSpace(sortBy) || !ProductSortOptions.Contains(sortBy))
             return "排序方式无效";
+        return null;
+    }
+
+    public static string? ProductReview(
+        long productId,
+        long orderId,
+        int rating,
+        string? comment)
+    {
+        if (productId <= 0)
+            return "商品编号无效";
+
+        if (orderId <= 0)
+            return "订单编号无效";
+
+        if (rating is < 1 or > 5)
+            return "评分必须为 1—5 星";
+
+        if (comment?.Trim().Length > MaxReviewCommentLength)
+            return $"评价内容不能超过 {MaxReviewCommentLength} 个字符";
+
         return null;
     }
 
