@@ -1,0 +1,16 @@
+# Never copy host build artifacts into the Linux build context.
+# The recursive patterns are required because projects live under src/ and test/.
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+
+# Local development files that are not needed by the image.
+**/*.user
+**/*.suo
+**/*.http
+**/appsettings.Development.json
+
+# Repository metadata.
+.git/
+.gitignore

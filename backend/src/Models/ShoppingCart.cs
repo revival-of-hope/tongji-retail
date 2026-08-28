@@ -1,6 +1,22 @@
-// ============================================================
-// 购物车模型 (ShoppingCart + CartItem)
-// 每个用户拥有唯一一个购物车（一对一）
-// 购物车明细（CartItem）记录每个商品的数量
-// 拆分为两张表满足第三范式
-// ============================================================
+namespace RetailSystem.Api.Models;
+
+public sealed class ShoppingCart
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public User User { get; set; } = null!;
+    public ICollection<CartItem> Items { get; set; } = [];
+}
+
+public sealed class CartItem
+{
+    public long Id { get; set; }
+    public long CartId { get; set; }
+    public long ProductId { get; set; }
+    public int Quantity { get; set; }
+
+    public ShoppingCart Cart { get; set; } = null!;
+    public Product Product { get; set; } = null!;
+}

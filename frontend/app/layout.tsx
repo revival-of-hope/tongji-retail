@@ -1,31 +1,17 @@
-import { Geist, Geist_Mono, Inter, Roboto } from "next/font/google"
-
+import type { Metadata } from "next"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { Providers } from "@/components/providers"
 
-const robotoHeading = Roboto({subsets:['latin'],variable:'--font-heading'});
+export const metadata: Metadata = {
+  title: "同济商品零售管理系统",
+  description: "Next.js 16 + ASP.NET Core 9 + EF Core 9 + Oracle 21c 商品零售管理系统",
+}
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable, robotoHeading.variable)}
-    >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   )
