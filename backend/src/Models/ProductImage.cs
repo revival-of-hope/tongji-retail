@@ -1,5 +1,12 @@
-// ============================================================
-// 商品图片模型 (ProductImage)
-// 将图片信息从商品表中拆分，满足第三范式
-// 一个商品可以有多张图片，其中一张为主图
-// ============================================================
+namespace RetailSystem.Api.Models;
+
+public sealed class ProductImage
+{
+    public long Id { get; set; }
+    public long ProductId { get; set; }
+    public required string ImageUrl { get; set; }
+    public bool IsMain { get; set; }
+    public int SortOrder { get; set; }
+
+    public Product Product { get; set; } = null!;
+}

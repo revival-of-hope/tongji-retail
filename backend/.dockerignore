@@ -1,13 +1,16 @@
-# 本地编译和还原缓存（最重要，必须排除）
-obj/
-bin/
+# Never copy host build artifacts into the Linux build context.
+# The recursive patterns are required because projects live under src/ and test/.
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
 
-# 开发环境配置（不应进入生产镜像）
-appsettings.Development.json
+# Local development files that are not needed by the image.
+**/*.user
+**/*.suo
+**/*.http
+**/appsettings.Development.json
 
-# 迁移工具相关（运行时不需要）
-*.http
-
-# Git 相关
+# Repository metadata.
 .git/
 .gitignore
