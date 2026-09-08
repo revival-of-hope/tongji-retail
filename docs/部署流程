@@ -1,0 +1,22 @@
+1. 在任意一个支持Ubuntu22以上版本的服务器商中注册了一个服务器后,通过ssh在本地连接:
+
+```bash
+ssh root@202.182.120.138
+```
+2. 输入密码后即可进入该服务器
+
+首先执行升级命令:
+```bash
+sudo apt update
+```
+
+之后安装Dokploy:
+```bash
+curl -fsSL https://dokploy.com/install.sh | sh
+```
+
+这将会在该服务器IP地址的3000端口开放Dokploy操作面板.
+
+进入操作面板后先注册管理员账户,然后关联到自己的Gihub账户,并授权使用自己的目标Github仓库.
+
+新建一个项目后创建一个Service,在Service中选取自己的目标仓库,采用Compose部署,顺利完成.
