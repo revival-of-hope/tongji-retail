@@ -3,41 +3,31 @@
 ## backend03
 ## frontend01
 
-### OpenAPI 路由
+### 阶段性学习心得
 
-我理解到这个项目采用的是“契约优先”的前后端协作方式。后端把接口路径、请求参数、响应结构和 `operationId` 统一写在 `backend/openapi/retail-system.json` 中，前端不需要再手写一套接口定义。当前接口按认证、商品、购物车、订单、商家、工单、报表和管理员功能分组，每个公开接口都有唯一的 `operationId`，HeyAPI 会用它生成对应的 TypeScript 函数。
+这段时间，我主要围绕 tongji-retail 项目中 `frontend01` 的任务进行学习，接触了 Git 多人协作、Next.js App Router、HTTP 接口、OpenAPI、HeyAPI 以及 `sdk.ts` 接口适配层。刚开始时，我对这些概念都比较陌生，很多时候只是跟着说明运行命令，并不清楚命令做了什么，也分不清页面、组件、接口和后端之间的关系。经过几轮实际操作和源码阅读后，我现在已经能够大致理解项目的目录结构，并开始建立起前端页面与后端接口之间的完整联系。
 
-例如几条我重点梳理过的调用关系：
+在项目管理方面，我首先了解了本地仓库、`origin` 和 `upstream` 的区别。`upstream` 指向组长维护的正式项目仓库，`origin` 指向我 Fork 后的个人仓库，本地仓库则是保存在自己电脑上的项目副本。一般需要先在本地分支完成修改，再提交并推送到个人仓库，最后通过 Pull Request 请求组长审核和合并。通过这次实践，我不再只是机械地复制 Git 命令，而是开始理解每一步修改被保存到了哪里。
 
-| HTTP 路由 | operationId | SDK 中的调用 |
-| --- | --- | --- |
-| `GET /api/products` | `GetProducts` | `api.products(query)` |
-| `GET /api/products/{id}` | `GetProduct` | `api.product(id)` |
-| `POST /api/cart/items` | `AddCartItem` | `api.addCartItem(body)` |
-| `POST /api/orders` | `CreateOrder` | `api.createOrder(body)` |
-| `POST /api/orders/{id}/pay` | `PayOrder` | `api.payOrder(id, body)` |
-| `PUT /api/merchants/{id}/review` | `ReviewMerchant` | `api.reviewMerchant(id, body)` |
+我也学习了 `package.json` 的基本作用。它不仅记录项目使用的依赖，还通过 `scripts` 定义了启动、检查和生成代码等命令。例如，执行 `pnpm dev` 时，实际运行的内容可以在 `package.json` 的 `scripts` 中找到。遇到不熟悉的命令时，我现在会先查看项目配置，而不是只记住命令本身。运行开发服务器后，我也理解了 `localhost` 表示本机，端口用于区分本机上运行的不同服务。前端和后端是两个相对独立的服务，因此即使前端页面能够打开，也不代表后端和数据库已经正常运行。
 
-路径中的 `{id}`、`{cartItemId}` 会生成 `path` 参数，请求体会生成 `body` 参数，商品查询中的关键词、分类、价格和排序等条件会生成 `query` 类型。这样在页面调用接口时，如果参数名或类型写错，TypeScript 在编译阶段就能发现。
+在页面组织方面，我初步理解了 Next.js App Router 根据目录结构生成路由的方式。`page.tsx` 是页面入口，`layout.tsx` 用于为一定范围内的页面提供共享布局，普通组件则需要被页面或其他组件引用后才会显示。通过移除登录页面中的 `<Navbar />`，我观察到导航栏消失了，但登录页面仍然能够正常访问。这个操作让我更直观地区分了“决定页面能否访问的路由”和“页面内部显示的组件”。
 
-### HeyAPI 生成目录
+我还了解到，`[id]` 表示动态路由段。例如，访问 `/merchant/products/125/edit` 时，会匹配 `app/merchant/products/[id]/edit/page.tsx`，其中 `125` 会作为商品编号传入页面。像 `(shop)` 这样带圆括号的目录属于路由组，主要用于整理文件或共享布局，目录名称本身不会出现在网址中。
 
-`frontend/openapi-ts.config.ts` 指定输入为后端的 OpenAPI JSON，输出到 `frontend/lib/api/generated`，并启用了 Fetch 客户端、TypeScript 类型和 SDK 三个插件。运行 `pnpm generate:api` 后，主要生成内容如下：
+本次学习中，我花费时间最多的部分是理解 OpenAPI、HeyAPI 和 `sdk.ts` 之间的关系。刚开始时，我容易把接口文档、代码生成工具和请求代码混为一谈。对照项目源码后，我认识到，OpenAPI 文档负责描述接口路径、请求方式、参数以及响应数据结构；HeyAPI 读取 OpenAPI 文档，自动生成 TypeScript 类型和底层请求函数；手写的 `sdk.ts` 则在生成代码的基础上，对参数、认证信息、错误处理和返回数据进行统一封装，为页面提供更加方便的调用方法。
 
-- `types.gen.ts`：请求 DTO、响应 DTO、路径参数和查询参数类型。
-- `sdk.gen.ts`：按照 `operationId` 生成的底层请求函数，例如 `getProducts`、`createOrder`。
-- `client.gen.ts` 和 `client/`：Fetch 客户端实例及请求处理代码。
-- `core/`：参数、路径、请求体和认证等通用序列化逻辑。
+阅读 `retail-system.json` 时，我学会了先从 `paths` 查看接口路径和 GET、POST 等请求方式，再查看 `requestBody`、`responses` 和 `operationId`。如果遇到 `$ref`，就继续到 `components` 中查找对应的数据结构。文档中出现 404、409 等状态码，只是在说明接口可能返回这些结果，并不代表当前已经发生错误。类似地，HeyAPI 能够成功生成代码，也只能说明接口文档可以被读取，并不能证明后端业务和数据库一定能够正常运行。
 
-我不会直接修改 `generated` 目录，因为下次执行生成命令时手工修改会被覆盖。正确流程是后端更新 OpenAPI 文件后，前端重新执行 `pnpm generate:api`，再运行 `pnpm typecheck` 检查受影响的调用。
+我现在知道，`generated` 目录是 HeyAPI 根据 OpenAPI 自动生成的结果，不应该直接手动修改。开发人员只有在接口文档发生变化后执行 `pnpm generate:api`，才会重新生成这些文件。用户在网页上进行登录、查询商品或提交订单时，只会调用已经生成好的请求函数，不会在每次操作时重新运行 HeyAPI。
 
-### `sdk.ts` 的作用
+通过阅读 `sdk.ts`，我也初步理解了它作为接口适配层的作用。页面调用 `api.xxx()` 方法后，`sdk.ts` 会组织相应的路径参数、查询参数或请求体，再调用 `generated` 目录中的函数发送 HTTP 请求。它还会统一设置后端地址、携带 JWT 登录信息、处理响应数据，并在请求失败时抛出错误。因此，`sdk.ts` 不是把生成代码重新实现一遍，而是在自动生成代码和具体页面之间增加一层更适合业务使用的包装。
 
-`frontend/lib/api/sdk.ts` 是生成代码和页面之间的手写适配层。文件开头分别引入生成的客户端、底层 SDK 函数和 DTO 类型。`client.setConfig` 完成两项公共配置：一是从 `NEXT_PUBLIC_API_URL` 读取后端地址，未配置时使用 `http://localhost:8080`；二是在浏览器环境中读取 LocalStorage 里的 `retail-access-token`，交给生成客户端添加认证信息。
+此外，我对 JWT、Zustand 和权限检查也有了初步认识。JWT 主要用于在请求中携带用户的认证信息，Zustand 用于管理前端页面之间共享的状态，而真正的业务权限仍然必须由后端验证。前端隐藏一个按钮只能改善页面交互，不能代替后端的权限控制。
 
-后端响应统一使用 `{ code, message, data }` 信封，所以 `unwrap<T>` 会集中判断错误响应、空响应和空数据，失败时抛出带 HTTP 状态码的 `ApiError`，成功时只把真正的 `data` 返回给页面。最下面的 `api` 对象进一步把生成函数包装成更适合业务页面使用的方法。例如页面调用 `api.product(id)` 即可，内部再转换为 `generated.getProduct({ path: { id } })`；调用 `api.createOrder(body)` 时，请求和返回值会分别受到 `CreateOrderRequest`、`OrderDetail` 类型约束。
+经过这一阶段的学习，我已经能够说出项目的基本结构，并理解一条请求大致会经过“页面—`sdk.ts`—生成客户端—HTTP 接口—后端—JSON 响应—页面渲染”的过程。不过，我目前还不能熟练地独立追踪所有接口，对 `operationId`、请求和响应类型以及接口改动后的同步流程也需要继续练习。
 
-经过这次阅读，我可以从一个页面中的 `api.xxx()` 调用，继续追踪到 `sdk.ts`、`sdk.gen.ts`，最后找到 OpenAPI 中对应的 HTTP 方法和路径。我也理解了生成代码负责“严格对应接口契约”，手写 `sdk.ts` 负责“统一配置和提供易用的业务调用”这一层次划分。
+下一阶段，我准备重点选择登录和商品查询两个具体功能，从页面入口开始逐层查看状态管理、`sdk.ts`、生成代码和后端接口，并通过实际运行观察请求地址、参数和响应结果。对我来说，真正看懂项目并不是记住几个技术名称，而是能够找到相关代码、说明每一层的作用，并在出现问题时知道应该从哪里开始排查。
 
 ## frontend02
 ## frontend03
