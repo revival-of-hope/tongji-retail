@@ -16,3 +16,6 @@ frontend/openapi-ts-error-*.log
 Thumbs.db
 *.user
 *.suo
+
+# Design docs & local design assets
+design/
