@@ -15,8 +15,14 @@ sudo apt update
 curl -fsSL https://dokploy.com/install.sh | sh
 ```
 
+
 这将会在该服务器IP地址的3000端口开放Dokploy操作面板.
 
 进入操作面板后先注册管理员账户,然后关联到自己的Gihub账户,并授权使用自己的目标Github仓库.
 
 新建一个项目后创建一个Service,在Service中选取自己的目标仓库,采用Compose部署,顺利完成.
+
+注,删除同IP服务器旧记录的方法:
+```bash
+ssh-keygen -R 202.182.120.139
+```
