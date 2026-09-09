@@ -135,7 +135,7 @@ export default function ShopPage() {
         <div className="mx-auto max-w-7xl px-4 py-12">
           <p className="text-sm font-medium text-primary">商品零售管理系统</p>
           <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">
-            从商品浏览到多角色运营，使用同一份 OpenAPI 契约
+            欢迎选购
           </h1>
           <form
             className="mt-8 flex max-w-2xl gap-2"
